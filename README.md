@@ -49,12 +49,19 @@ cp .env.example .env
 
 ## Run
 
+Make sure the virtual environment is active, then start the server:
+
 ```bash
+source .venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
-- Web UI: <http://localhost:8000/> (paste a link or the posting text)
-- Interactive API docs: <http://localhost:8000/docs>
+There is no separate frontend to build or start: the web UI is a single static page served by the same FastAPI app. Once the server is running, open:
+
+- **Web UI:** <http://localhost:8000/> — paste a job posting link or its text
+- **Interactive API docs:** <http://localhost:8000/docs>
+
+To use a different port: `uvicorn app.main:app --reload --port 8080`.
 
 ## API
 
