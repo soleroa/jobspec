@@ -1,7 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from app.extractor import extract_job_offer
+from app.extractor import (
+    ConfigError,
+    ExtractionError,
+    UpstreamError,
+    extract_job_offer,
+)
 from app.models import JobOffer
 
 app = FastAPI(
@@ -21,4 +26,15 @@ def health() -> dict:
 
 @app.post("/extract", response_model=JobOffer)
 def extract(req: ExtractRequest) -> JobOffer:
-    return extract_job_offer(req.text)
+    try:
+        return extract_job_offer(req.text)
+    except ExtractionError as e:
+        # El texto no tenía datos suficientes (ej: falta la empresa) o el modelo no se corrigió.
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "No se pudo extraer una oferta válida del texto", "errors": e.details},
+        )
+    except UpstreamError as e:
+        raise HTTPException(status_code=502, detail={"message": str(e)})
+    except ConfigError as e:
+        raise HTTPException(status_code=503, detail={"message": str(e)})

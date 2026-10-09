@@ -4,6 +4,14 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+# Valores de relleno que un modelo puede escribir para "llenar" un campo obligatorio.
+PLACEHOLDERS = {
+    "desconocida", "desconocido", "no especificada", "no especificado", "no indicada",
+    "no indicado", "no informada", "no informado", "sin especificar", "confidencial",
+    "n/a", "na", "none", "null", "unknown", "not specified", "unspecified", "tbd", "-", "?",
+}
+
+
 class WorkMode(str, Enum):
     remote = "remote"
     hybrid = "hybrid"
@@ -81,6 +89,8 @@ class JobOffer(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("no puede estar vacío")
+        if v.lower().strip(".") in PLACEHOLDERS:
+            raise ValueError(f"'{v}' es un valor de relleno: el dato no aparece en el texto")
         return v
 
     @field_validator("required_skills", "nice_to_have_skills")
