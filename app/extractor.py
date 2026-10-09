@@ -19,11 +19,45 @@ TOOL_NAME = "save_job_offer"
 
 SYSTEM_PROMPT = (
     "Sos un extractor de datos de ofertas de trabajo. Leé el texto del usuario y "
-    "llamá a la función save_job_offer con los datos que aparezcan en el texto. "
-    "Reglas: no inventes nada; si un dato no está en el texto, dejalo en null "
-    "(o lista vacía). Los skills van como nombres cortos (ej: 'Python', 'Docker'). "
-    "Los salarios son números sin símbolos ni separadores."
+    "llamá a la función save_job_offer con los datos que aparezcan en el texto.\n"
+    "Reglas generales:\n"
+    "- No inventes nada. Si un dato no está en el texto, dejalo en null (o lista vacía).\n"
+    "- seniority: solo si el texto declara el nivel con palabras (senior, sr, junior, lead, "
+    "semi senior...). NUNCA lo deduzcas de los años de experiencia: '4+ años' no significa senior.\n"
+    "Skills:\n"
+    "- Considerá las tecnologías y prácticas nombradas en TODO el texto, también en las "
+    "responsabilidades (ej: frameworks como Express o NestJS) y prácticas como OOP, Agile o Scrum.\n"
+    "- Alternativas: si el texto dice 'X, Y o Z', 'X and/or Y' o 'cualquiera de', no pongas esas "
+    "skills en required_skills; ponelas juntas como un grupo en skill_alternatives. "
+    "required_skills es solo para lo que se exige sin alternativa.\n"
+    "- Lo que el texto presenta como plus, deseable o nice to have va en nice_to_have_skills.\n"
+    "- Preferí términos concretos ('PostgreSQL', 'Docker') o frases específicas "
+    "('despliegue de modelos de ML en producción'). Evitá etiquetas genéricas sueltas como "
+    "'AI', 'ML', 'cloud' o 'backend'.\n"
+    "Otros campos: languages = idiomas pedidos con nivel (ej: 'English (advanced)'); "
+    "timezone = huso o horario exigido (ej: 'US hours'). Los salarios son números sin "
+    "símbolos ni separadores."
 )
+
+# Palabras que declaran cada nivel. Si el modelo devuelve un nivel y el texto no contiene
+# ninguna, es una deducción (ej: desde "4+ años") y se descarta.
+SENIORITY_KEYWORDS = {
+    "intern": r"intern(ship)?|pasante|trainee|becari[oa]",
+    "junior": r"junior|jr",
+    "semi_senior": r"semi[\s-]?senior|ssr|mid[\s-]?level|\bmid\b",
+    "senior": r"senior|sr",
+    "lead": r"lead|l[ií]der|principal|staff|head of",
+}
+
+
+def drop_unstated_seniority(offer: JobOffer, text: str) -> JobOffer:
+    """Pone seniority en null si el texto no declara ese nivel explícitamente."""
+    if offer.seniority is None:
+        return offer
+    pattern = SENIORITY_KEYWORDS[offer.seniority.value]
+    if not re.search(rf"\b({pattern})\b", text, re.IGNORECASE):
+        return offer.model_copy(update={"seniority": None})
+    return offer
 
 RETRY_RULE = (
     "Corregí solo lo que falló. Si el dato NO aparece en el texto original, no lo inventes "
@@ -150,7 +184,7 @@ def extract_job_offer(text: str) -> JobOffer:
             if not tool_calls:
                 raise _BadModelOutput("El modelo no llamó a la herramienta")
             call = tool_calls[0]
-            return _parse(call)
+            return drop_unstated_seniority(_parse(call), text)
         except _BadModelOutput as e:
             last = e
             if call is None:

@@ -1,0 +1,21 @@
+Software Engineer
+Flatiron — Remote
+
+About the role
+Flatiron is looking for a Software Engineer to join our remote engineering team. You will work on web applications and backend services used by our customers every day.
+
+Responsibilities
+- Design, build and maintain backend services and APIs using Express or NestJS.
+- Build user-facing features with React and Next.js.
+- Deploy and monitor machine learning models in production, working with the data team on AI-powered features.
+- Write clean, maintainable code following OOP principles and take part in Agile / Scrum ceremonies.
+- Review code and mentor teammates.
+
+Requirements
+- 4+ years of professional software development experience.
+- Strong experience with Python and/or Node.js.
+- Solid knowledge of React, Next.js and TypeScript.
+- Experience with relational or document databases: MySQL, MongoDB, or PostgreSQL.
+- Experience with a major cloud provider: AWS, GCP, or Azure.
+- Advanced English, written and spoken.
+- Availability to work US hours (overlap with US time zones is required).
