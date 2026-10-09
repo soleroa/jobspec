@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.extractor import (
@@ -7,6 +10,7 @@ from app.extractor import (
     UpstreamError,
     extract_job_offer,
 )
+from app.fetcher import FetchError, fetch_job_text
 from app.models import JobOffer
 
 app = FastAPI(
@@ -19,15 +23,18 @@ class ExtractRequest(BaseModel):
     text: str = Field(..., min_length=20, max_length=20000, description="Texto de la oferta")
 
 
+class ExtractUrlRequest(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048, description="Link a la oferta")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/extract", response_model=JobOffer)
-def extract(req: ExtractRequest) -> JobOffer:
+def _run_extraction(text: str) -> JobOffer:
     try:
-        return extract_job_offer(req.text)
+        return extract_job_offer(text)
     except ExtractionError as e:
         # El texto no tenía datos suficientes (ej: falta la empresa) o el modelo no se corrigió.
         raise HTTPException(
@@ -38,3 +45,21 @@ def extract(req: ExtractRequest) -> JobOffer:
         raise HTTPException(status_code=502, detail={"message": str(e)})
     except ConfigError as e:
         raise HTTPException(status_code=503, detail={"message": str(e)})
+
+
+@app.post("/extract", response_model=JobOffer)
+def extract(req: ExtractRequest) -> JobOffer:
+    return _run_extraction(req.text)
+
+
+@app.post("/extract/url", response_model=JobOffer)
+def extract_url(req: ExtractUrlRequest) -> JobOffer:
+    try:
+        text = fetch_job_text(req.url)
+    except FetchError as e:
+        raise HTTPException(status_code=e.status, detail={"message": str(e), "errors": []})
+    return _run_extraction(text)
+
+
+# La interfaz web se sirve en "/". Va al final para no tapar los endpoints de la API.
+app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="ui")

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jobspec</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1a1d23; --muted: #6b7280; --border: #e3e6eb;
+    --accent: #2f5bea; --accent-text: #fff; --chip: #eaf0ff; --chip-text: #2447c4;
+    --chip2: #f0f1f3; --chip2-text: #4b5563; --err-bg: #fdecec; --err-text: #a12020;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12141a; --card: #1b1e26; --text: #e7e9ee; --muted: #9aa1ad; --border: #2c303b;
+      --accent: #6c8cff; --accent-text: #0e1220; --chip: #232b4a; --chip-text: #aebeff;
+      --chip2: #262a33; --chip2-text: #b6bcc7; --err-bg: #3a1c1f; --err-text: #ffb3b3;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 28px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab { background: none; border: 0; padding: 8px 14px; cursor: pointer; color: var(--muted);
+         font: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  textarea, input[type=url] { width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+         border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  textarea { min-height: 220px; resize: vertical; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+  .actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; }
+  button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px;
+         padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.primary:disabled { opacity: .6; cursor: wait; }
+  .status { color: var(--muted); font-size: 14px; }
+  .error { margin-top: 16px; background: var(--err-bg); color: var(--err-text); border-radius: 8px; padding: 12px 14px; }
+  .error ul { margin: 6px 0 0; padding-left: 20px; }
+  #result { margin-top: 24px; }
+  .result-head h2 { margin: 0; font-size: 22px; }
+  .result-head .company { color: var(--muted); margin-top: 2px; }
+  dl { display: grid; grid-template-columns: 140px 1fr; gap: 10px 16px; margin: 18px 0 0; }
+  dt { color: var(--muted); font-size: 14px; padding-top: 2px; }
+  dd { margin: 0; }
+  .none { color: var(--muted); font-style: italic; }
+  .chip { display: inline-block; background: var(--chip); color: var(--chip-text); border-radius: 999px;
+          padding: 2px 10px; margin: 0 6px 6px 0; font-size: 14px; }
+  .chip.nice { background: var(--chip2); color: var(--chip2-text); }
+  details { margin-top: 18px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+        overflow-x: auto; font-size: 13px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 520px) { dl { grid-template-columns: 1fr; gap: 2px; } dd { margin-bottom: 10px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>jobspec</h1>
+  <p class="sub">Pegá una oferta de trabajo (link o texto) y obtené sus datos estructurados.</p>
+
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-url" aria-selected="true" aria-controls="panel-url">Link</button>
+      <button class="tab" role="tab" id="tab-text" aria-selected="false" aria-controls="panel-text">Texto</button>
+    </div>
+
+    <form id="form">
+      <div id="panel-url" role="tabpanel">
+        <label for="url" class="hint" style="margin:0 0 6px;display:block">URL de la oferta</label>
+        <input type="url" id="url" placeholder="https://empresa.com/careers/backend-developer">
+        <p class="hint">Funciona con páginas públicas. Sitios como LinkedIn o Indeed suelen bloquear la lectura automática: en ese caso usá la pestaña Texto.</p>
+      </div>
+      <div id="panel-text" role="tabpanel" hidden>
+        <label for="text" class="hint" style="margin:0 0 6px;display:block">Texto de la oferta</label>
+        <textarea id="text" placeholder="Pegá acá la descripción completa de la oferta…"></textarea>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary" id="submit">Extraer datos</button>
+        <span class="status" id="status" role="status"></span>
+      </div>
+    </form>
+
+    <div class="error" id="error" role="alert" hidden></div>
+  </section>
+
+  <section id="result" class="card" hidden>
+    <div class="result-head">
+      <h2 id="r-title"></h2>
+      <div class="company" id="r-company"></div>
+    </div>
+    <dl id="r-fields"></dl>
+    <details>
+      <summary>Ver JSON</summary>
+      <pre id="r-json"></pre>
+    </details>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let mode = "url";
+
+function setMode(m) {
+  mode = m;
+  for (const name of ["url", "text"]) {
+    $("tab-" + name).setAttribute("aria-selected", String(name === m));
+    $("panel-" + name).hidden = name !== m;
+  }
+  $("error").hidden = true;
+}
+$("tab-url").onclick = () => setMode("url");
+$("tab-text").onclick = () => setMode("text");
+
+const LABELS = {
+  seniority: { intern: "Pasante", junior: "Junior", semi_senior: "Semi senior", senior: "Senior", lead: "Lead" },
+  work_mode: { remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },
+  period: { hour: "por hora", month: "por mes", year: "por año" },
+};
+
+function none() { const s = document.createElement("span"); s.className = "none"; s.textContent = "No indicado"; return s; }
+function text(t) { return document.createTextNode(t); }
+function chips(list, cls) {
+  if (!list.length) return none();
+  const f = document.createDocumentFragment();
+  for (const s of list) { const c = document.createElement("span"); c.className = "chip " + cls; c.textContent = s; f.append(c); }
+  return f;
+}
+function fmtNum(n) { return n.toLocaleString("es-AR"); }
+function fmtSalary(s) {
+  if (!s || (s.min == null && s.max == null)) return null;
+  const range = s.min != null && s.max != null && s.min !== s.max ? `${fmtNum(s.min)} – ${fmtNum(s.max)}` : fmtNum(s.max ?? s.min);
+  return [s.currency, range, LABELS.period[s.period]].filter(Boolean).join(" ");
+}
+function fmtLocation(l) {
+  const v = l && [l.city, l.country].filter(Boolean).join(", ");
+  return v || null;
+}
+
+function render(o) {
+  $("r-title").textContent = o.title;
+  $("r-company").textContent = o.company;
+  const rows = [
+    ["Seniority", o.seniority ? text(LABELS.seniority[o.seniority]) : none()],
+    ["Modalidad", o.work_mode ? text(LABELS.work_mode[o.work_mode]) : none()],
+    ["Ubicación", fmtLocation(o.location) ? text(fmtLocation(o.location)) : none()],
+    ["Salario", fmtSalary(o.salary) ? text(fmtSalary(o.salary)) : none()],
+    ["Experiencia", o.years_experience != null ? text(o.years_experience + " años") : none()],
+    ["Skills requeridos", chips(o.required_skills, "")],
+    ["Skills deseables", chips(o.nice_to_have_skills, "nice")],
+  ];
+  const dl = $("r-fields"); dl.replaceChildren();
+  for (const [label, node] of rows) {
+    const dt = document.createElement("dt"); dt.textContent = label;
+    const dd = document.createElement("dd"); dd.append(node);
+    dl.append(dt, dd);
+  }
+  $("r-json").textContent = JSON.stringify(o, null, 2);
+  $("result").hidden = false;
+}
+
+function showError(msg, items) {
+  const box = $("error"); box.replaceChildren(text(msg));
+  if (items && items.length) {
+    const ul = document.createElement("ul");
+    for (const it of items) { const li = document.createElement("li"); li.textContent = `${it.field}: ${it.error}`; ul.append(li); }
+    box.append(ul);
+  }
+  box.hidden = false;
+}
+
+function errorMessage(status, body) {
+  const d = body && body.detail;
+  if (status === 422 && Array.isArray(d)) return { msg: "Revisá lo que ingresaste: el texto es muy corto o el link no es válido.", items: [] };
+  if (d && d.message) return { msg: d.message, items: d.errors || [] };
+  return { msg: `Error inesperado (${status}).`, items: [] };
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("error").hidden = true; $("result").hidden = true;
+  const value = (mode === "url" ? $("url").value : $("text").value).trim();
+  if (!value) { showError(mode === "url" ? "Pegá un link." : "Pegá el texto de la oferta."); return; }
+  const btn = $("submit"); btn.disabled = true;
+  $("status").textContent = mode === "url" ? "Leyendo la página y extrayendo…" : "Extrayendo…";
+  try {
+    const res = await fetch(mode === "url" ? "/extract/url" : "/extract", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(mode === "url" ? { url: value } : { text: value }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) { const { msg, items } = errorMessage(res.status, body); showError(msg, items); return; }
+    render(body);
+  } catch {
+    showError("No se pudo conectar con el servidor.");
+  } finally {
+    btn.disabled = false; $("status").textContent = "";
+  }
+});
+</script>
+</body>
+</html>

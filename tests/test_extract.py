@@ -85,3 +85,52 @@ def test_placeholder_company_is_rejected(monkeypatch):
     r = client.post("/extract", json={"text": TEXT})
     assert r.status_code == 422
     assert r.json()["detail"]["errors"][0]["field"] == "company"
+
+
+# ---- URL extraction ----
+from app import fetcher  # noqa: E402
+
+JOB_HTML = """<html><head><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting","title":"Backend Developer",
+ "hiringOrganization":{"@type":"Organization","name":"Acme"},
+ "jobLocation":{"address":{"addressLocality":"Rosario","addressCountry":"AR"}},
+ "description":"<p>We need someone with Python and FastAPI experience to build APIs for our platform team.</p>"}
+</script></head><body>menu</body></html>"""
+
+
+def test_jobposting_jsonld_is_preferred():
+    text = fetcher.html_to_job_text(JOB_HTML)
+    assert "Company: Acme" in text and "Rosario" in text and "FastAPI" in text and "<p>" not in text
+
+
+def test_plain_html_fallback_drops_scripts():
+    html = "<html><body><nav>menu</nav><script>var x=1</script><h1>Dev</h1><p>Python</p></body></html>"
+    text = fetcher.html_to_job_text(html)
+    assert "Dev" in text and "Python" in text and "var x" not in text and "menu" not in text
+
+
+@pytest.mark.parametrize("url", ["http://localhost/x", "http://127.0.0.1/", "http://169.254.169.254/", "file:///etc/passwd", "ftp://a.com"])
+def test_ssrf_blocked(url):
+    with pytest.raises(fetcher.FetchError):
+        fetcher._check_public_url(url)
+
+
+def test_extract_url_ok(monkeypatch):
+    monkeypatch.setattr("app.main.fetch_job_text", lambda url: "Acme busca Dev. " * 20)
+    patch_model(monkeypatch, [fake_response('{"title":"Dev","company":"Acme"}')])
+    r = client.post("/extract/url", json={"url": "https://example.com/job"})
+    assert r.status_code == 200 and r.json()["company"] == "Acme"
+
+
+def test_extract_url_unreadable_page(monkeypatch):
+    def blocked(url):
+        raise fetcher.FetchError("bloqueado", 422)
+
+    monkeypatch.setattr("app.main.fetch_job_text", blocked)
+    r = client.post("/extract/url", json={"url": "https://example.com/job"})
+    assert r.status_code == 422 and r.json()["detail"]["message"] == "bloqueado"
+
+
+def test_ui_is_served():
+    r = client.get("/")
+    assert r.status_code == 200 and "jobspec" in r.text
