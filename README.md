@@ -18,6 +18,13 @@ POST /extract  ──►  forced tool call (Groq)  ──►  Pydantic validatio
 3. If validation fails, the model gets the failing fields back and is asked to fix only those, up to `MAX_RETRIES` times.
 4. If it still fails, the API responds with an HTTP error that names the problem.
 
+**Extraction rules** (enforced by the prompt, the tool schema and validators):
+
+- `seniority` is only set when the posting says it. "4+ years" does not make a role "senior"; if the model infers it anyway, it is dropped (`null`) unless the text contains a keyword for that level.
+- "AWS, GCP, or Azure" or "Python and/or Node.js" are alternatives, so they go into `skill_alternatives` as one group, not into `required_skills`.
+- Technologies named in the responsibilities count, not only those in the requirements section.
+- Vague labels like `"AI"` or `"ML"` are discouraged in favor of concrete terms or specific phrases.
+
 **Missing data is never invented.** Only `title` and `company` are required. Everything else is `null` (or an empty list) when the text doesn't mention it. Filler values such as `"Unknown"` or `"N/A"` in required fields are rejected.
 
 ## Requirements
@@ -94,8 +101,11 @@ curl -X POST http://localhost:8000/extract \
   "location": {"city": "Buenos Aires", "country": null},
   "salary": {"min": 2500000.0, "max": 2500000.0, "currency": "ARS", "period": "month"},
   "required_skills": ["SQL", "Python", "Airflow"],
+  "skill_alternatives": [],
   "nice_to_have_skills": ["Spark"],
-  "years_experience": null
+  "years_experience": null,
+  "languages": [],
+  "timezone": null
 }
 ```
 
@@ -123,13 +133,16 @@ Limitations:
 | --------------------- | ----------------------------------------------------- | -------- |
 | `title`               | string                                                | yes      |
 | `company`             | string                                                | yes      |
-| `seniority`           | `intern` \| `junior` \| `semi_senior` \| `senior` \| `lead` | no |
+| `seniority`           | `intern` \| `junior` \| `semi_senior` \| `senior` \| `lead` — only if the posting states it; never inferred from years of experience | no |
 | `work_mode`           | `remote` \| `hybrid` \| `onsite`                      | no       |
 | `location`            | `{city, country}`                                     | no       |
 | `salary`              | `{min, max, currency (ISO 4217), period (hour/month/year)}` | no |
-| `required_skills`     | string[]                                              | no (`[]`) |
+| `required_skills`     | string[] — mandatory skills with no alternative       | no (`[]`) |
+| `skill_alternatives`  | string[][] — groups of interchangeable skills where one is enough, e.g. `[["AWS","GCP","Azure"]]` | no (`[]`) |
 | `nice_to_have_skills` | string[]                                              | no (`[]`) |
 | `years_experience`    | integer (0–50)                                        | no       |
+| `languages`           | string[], e.g. `["English (advanced)"]`               | no (`[]`) |
+| `timezone`            | string, e.g. `"US hours"`                             | no       |
 
 ### Errors
 

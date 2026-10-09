@@ -130,6 +130,17 @@ function chips(list, cls) {
   for (const s of list) { const c = document.createElement("span"); c.className = "chip " + cls; c.textContent = s; f.append(c); }
   return f;
 }
+function alternatives(groups) {
+  if (!groups.length) return none();
+  const f = document.createDocumentFragment();
+  for (const g of groups) {
+    const row = document.createElement("div");
+    row.append(chips(g, ""));
+    row.append(text("(alcanza con una)"));
+    f.append(row);
+  }
+  return f;
+}
 function fmtNum(n) { return n.toLocaleString("es-AR"); }
 function fmtSalary(s) {
   if (!s || (s.min == null && s.max == null)) return null;
@@ -151,7 +162,10 @@ function render(o) {
     ["Salario", fmtSalary(o.salary) ? text(fmtSalary(o.salary)) : none()],
     ["Experiencia", o.years_experience != null ? text(o.years_experience + " años") : none()],
     ["Skills requeridos", chips(o.required_skills, "")],
+    ["Uno de estos", alternatives(o.skill_alternatives)],
     ["Skills deseables", chips(o.nice_to_have_skills, "nice")],
+    ["Idiomas", o.languages.length ? chips(o.languages, "nice") : none()],
+    ["Huso horario", o.timezone ? text(o.timezone) : none()],
   ];
   const dl = $("r-fields"); dl.replaceChildren();
   for (const [label, node] of rows) {

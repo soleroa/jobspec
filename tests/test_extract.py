@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -134,3 +135,77 @@ def test_extract_url_unreadable_page(monkeypatch):
 def test_ui_is_served():
     r = client.get("/")
     assert r.status_code == 200 and "jobspec" in r.text
+
+
+# ---- Extraction quality (LLM mocked) ----
+import json  # noqa: E402
+
+from app.models import JobOffer  # noqa: E402
+
+FLATIRON = (Path(__file__).resolve().parent.parent / "samples" / "flatiron_software_engineer.txt").read_text()
+
+
+def extract_with(monkeypatch, payload: dict, text: str = FLATIRON) -> dict:
+    patch_model(monkeypatch, [fake_response(json.dumps(payload))])
+    r = client.post("/extract", json={"text": text})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_seniority_inferred_from_years_is_dropped(monkeypatch):
+    # El modelo deduce "senior" desde "4+ years"; el texto nunca dice senior.
+    out = extract_with(monkeypatch, {"title": "Software Engineer", "company": "Flatiron", "seniority": "senior", "years_experience": 4})
+    assert out["seniority"] is None
+    assert out["years_experience"] == 4
+
+
+@pytest.mark.parametrize(
+    "word,level",
+    [("Senior", "senior"), ("Sr.", "senior"), ("Junior", "junior"), ("Semi-Senior", "semi_senior"), ("Tech Lead", "lead")],
+)
+def test_explicit_seniority_is_kept(monkeypatch, word, level):
+    text = f"Acme busca {word} Backend Developer, remoto. Python y FastAPI, 3 años de experiencia."
+    out = extract_with(monkeypatch, {"title": "Backend Developer", "company": "Acme", "seniority": level}, text)
+    assert out["seniority"] == level
+
+
+def test_alternatives_are_not_all_required(monkeypatch):
+    out = extract_with(
+        monkeypatch,
+        {
+            "title": "Software Engineer",
+            "company": "Flatiron",
+            "required_skills": ["React", "AWS", "GCP", "Azure", "postgresql"],
+            "skill_alternatives": [["AWS", "GCP", "Azure"], ["MySQL", "MongoDB", "PostgreSQL"], ["Solo"]],
+        },
+    )
+    # Las skills que están en un grupo salen de required_skills; el grupo de 1 se descarta.
+    assert out["required_skills"] == ["React"]
+    assert out["skill_alternatives"] == [["AWS", "GCP", "Azure"], ["MySQL", "MongoDB", "PostgreSQL"]]
+
+
+def test_new_fields_languages_and_timezone(monkeypatch):
+    out = extract_with(
+        monkeypatch,
+        {"title": "Software Engineer", "company": "Flatiron", "languages": ["English (advanced)", "english (advanced)"], "timezone": " US hours "},
+    )
+    assert out["languages"] == ["English (advanced)"]
+    assert out["timezone"] == "US hours"
+
+
+def test_new_fields_default_to_empty(monkeypatch):
+    out = extract_with(monkeypatch, {"title": "Dev", "company": "Acme"}, TEXT)
+    assert out["languages"] == [] and out["timezone"] is None and out["skill_alternatives"] == []
+
+
+def test_schema_and_prompt_carry_the_rules():
+    props = extractor.TOOL["function"]["parameters"]["properties"]
+    assert "NUNCA" in props["seniority"]["description"]
+    assert "skill_alternatives" in props["required_skills"]["description"]
+    assert {"skill_alternatives", "languages", "timezone"} <= set(props)
+    assert "años de experiencia" in extractor.SYSTEM_PROMPT and "Express" in extractor.SYSTEM_PROMPT
+    assert "'AI'" in extractor.SYSTEM_PROMPT
+
+
+def test_sample_is_saved():
+    assert "Flatiron" in FLATIRON and "NestJS" in FLATIRON
